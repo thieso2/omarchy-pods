@@ -4,6 +4,7 @@
 
 #include <QDBusAbstractAdaptor>
 #include <QDBusArgument>
+#include <QDBusError>
 #include <QDBusInterface>
 #include <QDBusMessage>
 #include <QDBusMetaType>
@@ -184,8 +185,11 @@ bool AdvMonitor::start()
 {
     m_wanted = true;
     m_releaseRetries = 0;
+    m_registerRetries = 0;
     if (m_active)
         return true;
+    if (m_pendingActivate)
+        return false;
     if (!m_bus.isConnected())
         return false;
     return registerMonitor();
@@ -194,12 +198,13 @@ bool AdvMonitor::start()
 void AdvMonitor::stop()
 {
     m_wanted = false;
-    if (!m_active)
+    if (!m_active && !m_pendingActivate)
         return;
     QDBusInterface manager(bluezService, m_adapterPath, monitorManagerIface, m_bus);
     manager.call(QStringLiteral("UnregisterMonitor"),
                  QVariant::fromValue(QDBusObjectPath(appRootPath)));
     m_active = false;
+    m_pendingActivate = false;
     m_aliasByPath.clear();
 }
 
@@ -232,22 +237,75 @@ bool AdvMonitor::registerMonitor()
     }
 
     QDBusInterface manager(bluezService, adapterPath, monitorManagerIface, m_bus);
-    QDBusReply<void> registered = manager.call(QStringLiteral("RegisterMonitor"),
-                                               QVariant::fromValue(QDBusObjectPath(appRootPath)));
-    if (!registered.isValid()) {
-        LOG_WARN("AdvMonitor: RegisterMonitor failed: " << registered.error().message());
+    const QDBusMessage registered = manager.call(QStringLiteral("RegisterMonitor"),
+                                                 QVariant::fromValue(QDBusObjectPath(appRootPath)));
+    if (registered.type() == QDBusMessage::ErrorMessage) {
+        const QDBusError error(registered);
+        // A lost reply is not a refusal: bluetoothd has been observed
+        // accepting the monitor 25 s late, right as this call gave up.
+        // Hold the registration as pending — its Activate() call confirms
+        // it — and let the caller scan the old way until it does.
+        if (error.type() == QDBusError::NoReply || error.type() == QDBusError::Timeout) {
+            LOG_WARN("AdvMonitor: RegisterMonitor reply lost, waiting for Activate: "
+                     << error.message());
+            m_adapterPath = adapterPath;
+            beginPendingActivation();
+            return false;
+        }
+        // A retry after a lost reply can find the first registration standing.
+        if (error.name() == QStringLiteral("org.bluez.Error.AlreadyExists")) {
+            m_adapterPath = adapterPath;
+            establish();
+            LOG_INFO("AdvMonitor: monitor already registered on " << adapterPath);
+            return true;
+        }
+        LOG_WARN("AdvMonitor: RegisterMonitor failed: " << error.message());
         return false;
     }
 
     m_adapterPath = adapterPath;
-    m_active = true;
+    establish();
     LOG_INFO("AdvMonitor: Apple advertisement monitor registered on " << adapterPath);
     return true;
+}
+
+void AdvMonitor::establish()
+{
+    m_active = true;
+    m_pendingActivate = false;
+    m_registerRetries = 0;
+    emit established();
+}
+
+void AdvMonitor::beginPendingActivation()
+{
+    m_pendingActivate = true;
+    // Well past the longest observed bluetoothd processing delay.
+    QTimer::singleShot(30000, this, [this]() {
+        if (!m_pendingActivate || m_active || !m_wanted)
+            return;
+        m_pendingActivate = false;
+        // No Activate() came, so the registration truly vanished. Clear any
+        // half-state bluetoothd may hold, then retry a bounded number of
+        // times; the caller's fallback scan is running either way.
+        QDBusInterface manager(bluezService, m_adapterPath, monitorManagerIface, m_bus);
+        manager.call(QStringLiteral("UnregisterMonitor"),
+                     QVariant::fromValue(QDBusObjectPath(appRootPath)));
+        if (m_registerRetries++ < 2)
+            registerMonitor();
+    });
 }
 
 void AdvMonitor::onActivated()
 {
     m_releaseRetries = 0;
+    if (!m_active && m_wanted) {
+        // The RegisterMonitor reply was lost but bluetoothd accepted the
+        // monitor after all; this call is the confirmation.
+        establish();
+        LOG_INFO("AdvMonitor: monitor activated by bluetoothd after a lost reply");
+        return;
+    }
     LOG_DEBUG("AdvMonitor: monitor activated by bluetoothd");
 }
 

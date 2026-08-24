@@ -35,6 +35,9 @@ signals:
     void advertisement(const QString &address, const QString &name, const QByteArray &appleData);
     // The monitor could not be established or re-established; the caller may fall back to a discovery scan.
     void failed();
+    // The monitor is up — possibly late, after start() already returned
+    // false on a lost D-Bus reply; the caller can stop any fallback scan.
+    void established();
 
 private slots:
     void onPropertiesChanged(const QDBusMessage &message);
@@ -43,6 +46,8 @@ private slots:
 private:
     void ensureExported();
     bool registerMonitor();
+    void establish();
+    void beginPendingActivation();
     void emitFrame(const QString &devicePath, const QByteArray &appleData);
 
     QDBusConnection m_bus = QDBusConnection::systemBus();
@@ -54,5 +59,9 @@ private:
     bool m_exported = false;
     bool m_wanted = false;
     bool m_active = false;
+    // RegisterMonitor's reply was lost; bluetoothd may still hold the
+    // registration, and its Activate() call is what settles it.
+    bool m_pendingActivate = false;
     int m_releaseRetries = 0;
+    int m_registerRetries = 0;
 };

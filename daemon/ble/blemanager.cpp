@@ -109,6 +109,8 @@ BleManager::BleManager(QObject *parent) : QObject(parent)
             this, &BleManager::onAppleAdvertisement);
     connect(advMonitor, &AdvMonitor::failed,
             this, &BleManager::onAdvMonitorFailed);
+    connect(advMonitor, &AdvMonitor::established,
+            this, &BleManager::onAdvMonitorEstablished);
 }
 
 BleManager::~BleManager()
@@ -152,6 +154,18 @@ void BleManager::onAdvMonitorFailed()
         return;
     LOG_WARN("BLE advertisement monitor lost, falling back to a discovery scan");
     discoveryAgent->start(QBluetoothDeviceDiscoveryAgent::LowEnergyMethod);
+}
+
+void BleManager::onAdvMonitorEstablished()
+{
+    // The monitor can come up after startScan() already fell back — a
+    // RegisterMonitor reply lost to a slow bluetoothd, confirmed late by
+    // its Activate() call. The scan the fallback started would otherwise
+    // keep flooding the bus alongside the working monitor.
+    if (!discoveryAgent->isActive())
+        return;
+    LOG_INFO("BLE advertisement monitor established, stopping the fallback discovery scan");
+    discoveryAgent->stop();
 }
 
 void BleManager::onDeviceDiscovered(const QBluetoothDeviceInfo &info)

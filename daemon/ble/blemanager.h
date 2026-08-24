@@ -82,6 +82,7 @@ private slots:
     void onErrorOccurred(QBluetoothDeviceDiscoveryAgent::Error error);
     void onAppleAdvertisement(const QString &address, const QString &name, const QByteArray &data);
     void onAdvMonitorFailed();
+    void onAdvMonitorEstablished();
 
 signals:
     void deviceFound(const BleInfo &device);
