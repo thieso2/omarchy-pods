@@ -5,7 +5,7 @@
 # binary itself, since that would pull in BlueZ/PulseAudio/Qt6::Widgets.
 # Each test file is a single tst_*.cpp with QTEST_GUILESS_MAIN.
 
-find_package(Qt6 REQUIRED COMPONENTS Test Core Bluetooth)
+find_package(Qt6 REQUIRED COMPONENTS Test Core Bluetooth DBus)
 
 # Centralized include path so tests can `#include "../eardetection.hpp"`
 # without each adding their own target_include_directories.
@@ -145,6 +145,9 @@ openpods_add_test(tst_blemanager
     tst_blemanager.cpp
     ../ble/blemanager.cpp
     ../ble/blemanager.h
+    ../ble/advmonitor.cpp
+    ../ble/advmonitor.h
 )
 # Only test that parses a QBluetoothDeviceInfo, so only one needing the module.
-target_link_libraries(tst_blemanager PRIVATE Qt6::Bluetooth)
+# DBus rides along because BleManager now owns an AdvMonitor.
+target_link_libraries(tst_blemanager PRIVATE Qt6::Bluetooth Qt6::DBus)

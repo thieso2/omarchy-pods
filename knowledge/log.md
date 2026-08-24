@@ -61,3 +61,12 @@ than quietly rewritten.
 - Two claims that looked like defects and were not, both settled on the box: the
   daemon does remove `status.json` when systemd stops it, and a `FileView` does
   pick up a file created after the shell started.
+
+## 2026-08-23
+
+- `ble-advmonitor-ends-the-scan-storm`: added with the AdvMonitor rewrite of
+  the daemon's BLE path. The discovery-scan cost was measured live (PSI, top,
+  dbus-monitor) while triaging a system-wide lag report, not inferred; the
+  monitor's numbers were measured the same evening after the switch. The one
+  unverified leg — a live proximity frame through the monitor — is recorded in
+  the fact itself.

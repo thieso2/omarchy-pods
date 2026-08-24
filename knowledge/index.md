@@ -25,3 +25,4 @@ fact was not observable, the file says so in its own words instead of guessing.
 | [plugin-design-decisions](plugin-design-decisions.md) | what this panel owns against the stock audio and Bluetooth panels |
 | [airpods-pro-3-has-no-off-mode](airpods-pro-3-has-no-off-mode.md) | why the mode list comes from the daemon and not from a constant |
 | [nerd-font-glyph-coverage](nerd-font-glyph-coverage.md) | why the bar mark is drawn: fontconfig claims glyphs the font cannot draw |
+| [ble-advmonitor-ends-the-scan-storm](ble-advmonitor-ends-the-scan-storm.md) | why the daemon monitors instead of scanning, and the main.conf switch that gates it |

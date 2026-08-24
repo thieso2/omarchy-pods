@@ -63,6 +63,8 @@ public:
     QDateTime lastSeen; // Timestamp of last detection
 };
 
+class AdvMonitor;
+
 class BleManager : public QObject
 {
     Q_OBJECT
@@ -78,6 +80,8 @@ private slots:
     void onDeviceDiscovered(const QBluetoothDeviceInfo &info);
     void onScanFinished();
     void onErrorOccurred(QBluetoothDeviceDiscoveryAgent::Error error);
+    void onAppleAdvertisement(const QString &address, const QString &name, const QByteArray &data);
+    void onAdvMonitorFailed();
 
 signals:
     void deviceFound(const BleInfo &device);
@@ -88,6 +92,13 @@ private:
     // that start/stop/isScan would dereference. Real assignment
     // happens in BleManager::BleManager() via parented `new`.
     QBluetoothDeviceDiscoveryAgent *discoveryAgent = nullptr;
+    // Preferred path: a BlueZ pattern monitor, so no discovery session
+    // floods the system bus with every nearby device. The discovery agent
+    // above survives only as the fallback when BlueZ refuses the monitor.
+    AdvMonitor *advMonitor = nullptr;
+    // Caller intent, distinct from isScanning(): the fallback consults it
+    // when the monitor fails after startScan() returned.
+    bool scanWanted = false;
 };
 
 #endif // BLEMANAGER_H
